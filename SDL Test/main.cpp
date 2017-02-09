@@ -21,22 +21,43 @@ using namespace std;
 // Globals
 // Real programs don't use globals :-D
 // Data would normally be read from files
-GLfloat vertices[] = {	-1.0f,0.0f,0.0f,
-						0.0f,1.0f,0.0f,
-						0.0f,0.0f,0.0f, };
-GLfloat colours[] = {	1.0f, 0.0f, 0.0f,
-						0.0f, 1.0f, 0.0f,
-						0.0f, 0.0f, 1.0f };
-GLfloat vertices2[] = {	0.0f,0.0f,0.0f,
-						0.0f,-1.0f,0.0f,
-						1.0f,0.0f,0.0f };
+GLuint cubeVertCount = 8;
+GLfloat cubeVerts[] = { -0.5, -0.5f, -0.5f,
+-0.5, 0.5f, -0.5f,
+0.5, 0.5f, -0.5f,
+0.5, -0.5f, -0.5f,
+-0.5, -0.5f, 0.5f,
+-0.5, 0.5f, 0.5f,
+0.5, 0.5f, 0.5f,
+0.5, -0.5f, 0.5f };
+GLfloat cubeColours[] = { 0.0f, 0.0f, 0.0f,
+0.0f, 1.0f, 0.0f,
+1.0f, 1.0f, 0.0f,
+1.0f, 0.0f, 0.0f,
+0.0f, 0.0f, 1.0f,
+0.0f, 1.0f, 1.0f,
+1.0f, 1.0f, 1.0f,
+1.0f, 0.0f, 1.0f };
+
+GLuint cubeIndexCount = 36;
+GLuint cubeIndices[] = { 0,1,2, 0,2,3, // back  
+1,0,5, 0,4,5, // left					
+6,3,2, 3,6,7, // right
+1,5,6, 1,6,2, // top
+0,3,4, 3,7,4, // bottom
+6,5,4, 7,6,4 }; // front
 
 
-GLuint meshObjects[2];
+
+
+
+
+
+GLuint meshObjects[1];
 
 GLuint mvpShaderProgram;
 glm::mat4 MVP;
-GLfloat dx = 0.0f, dy = 0.0f, sx = 1.0f, sy= 1.0f, r = 0.0f;
+GLfloat dx = 0.0f, dy = 0.0f, sx = 1.0f, sy= -4.0f, r = 0.0f;
 
 // Set up rendering context
 SDL_Window * setupRC(SDL_GLContext &context) {
@@ -68,13 +89,15 @@ SDL_Window * setupRC(SDL_GLContext &context) {
 }
 
 void init(void) {
+	glEnable(GL_DEPTH_TEST);
 	// For this simple example we'll be using the most basic of shader programs
 	//rt3d::initShaders("minimal.vert","minimal.frag");
 	mvpShaderProgram = rt3d::initShaders("mvp.vert", "minimal.frag");
 	MVP = glm::mat4(1.0);
 	// Going to create our mesh objects here
-	meshObjects[0] = rt3d::createColourMesh(3, vertices, colours);
-	meshObjects[1] = rt3d::createMesh(3, vertices2);
+	meshObjects[0] = rt3d::createMesh(cubeVertCount, cubeVerts,
+		cubeColours, nullptr, nullptr, cubeIndexCount, cubeIndices);
+
 
 }
 
@@ -97,32 +120,33 @@ void update() {
 		sy = 1;
 		r = 0;
 	}
+	if (dx > 2.0f || dx < -2.0f)
+		dx = -dx;
+	if (dy > 2.0f || dy < -2.0f)
+		dy = -dy;
+	std::cout << dx << std::endl;
 
 }
 
 void draw(SDL_Window * window) {
 	// clear the screen
 	glClearColor(0.5f,0.5f,0.5f,1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-	MVP = glm::rotate(MVP, float(0.1f *DEG_TO_RAD), glm::vec3(0.0f,0.0f,1.0f));
-	rt3d::setUniformMatrix4fv(mvpShaderProgram, "MVP", glm::value_ptr(MVP));
-	rt3d::drawMesh(meshObjects[0],3,GL_TRIANGLES);
-	glm::mat4 identity(1.0);
-	glm::mat4 MVP2 = glm::translate(identity, glm::vec3(dx,dy, 0));
-	MVP2 = glm::scale(MVP2, glm::vec3(sx, sy, 0));
-	MVP2 = glm::rotate(MVP2, float(r*DEG_TO_RAD), glm::vec3(0.0f, 0.0f, 1.0f));
-	rt3d::setUniformMatrix4fv(mvpShaderProgram, "MVP", glm::value_ptr(MVP2));
-	rt3d::drawMesh(meshObjects[1],3,GL_TRIANGLES);
-	
-	// These are deprecated functions. If a core profile has been correctly 
-	// created, these commands should compile, but wont render anything
-	glColor3f(0.5,1.0,1.0);
-	glBegin(GL_TRIANGLES);
-		glVertex3f(0.5,0.5,0.0);
-		glVertex3f(0.7,0.5,0.0);
-		glVertex3f(0.5,0.7,0.0);
-	glEnd();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glm::mat4 projection(1.0);
+	projection = glm::perspective(float(60.0f*DEG_TO_RAD), 800.0f / 600.0f, 1.0f, 50.0f);
+	glm::mat4 modelview(1.0);
 
+	modelview = glm::translate(modelview, glm::vec3(dx, dy, sy));
+	glm::mat4 MVP = projection * modelview;
+	// perform any required MVP transformations here...
+	MVP = glm::translate(MVP, glm::vec3(dx, dy, 0));
+	MVP = glm::rotate(MVP, r, glm::vec3(1.0f, 1.0f, 1.0f));
+	MVP = glm::scale(MVP, glm::vec3(sx,sx,sx));
+	rt3d::setUniformMatrix4fv(mvpShaderProgram, "MVP", glm::value_ptr(MVP));
+	rt3d::drawIndexedMesh(meshObjects[0], cubeIndexCount, GL_TRIANGLES);
+
+
+	
     SDL_GL_SwapWindow(window); // swap buffers
 }
 
