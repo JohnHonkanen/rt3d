@@ -37,5 +37,17 @@
     <None Include="mvp.vert">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="phong.frag">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="phong.vert">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="gouraud.vert">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="simple.frag">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>
