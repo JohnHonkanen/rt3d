@@ -235,7 +235,7 @@ void draw(SDL_Window * window) {
 	rt3d::setUniformMatrix4fv(shaderProgram, "projection", glm::value_ptr(projection));
 	glm::mat4 modelview(1.0);
 	mvStack.push(modelview);
-	at = moveForward(player, r, 1.0f);
+	at = moveForward(player, r, 0.0f);
 	mvStack.top() = glm::lookAt(eye, at, up);
 
 	glm::vec4 tmp = mvStack.top()*lightPosition;
