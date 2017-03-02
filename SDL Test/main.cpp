@@ -66,14 +66,15 @@ GLuint meshObjects[1];
 GLuint textures[3];
 
 GLuint shaderProgram;
-GLfloat r = 0.0f, red = 0.0f, green = 0.0f, blue = 0.0f;
-GLfloat px = 0.0f, py = 0.0f;
+GLfloat r = 0.0f;
+GLfloat dx = 0.0f, dy = 0.0f, dz = 0.0f, scale = 1.0f;
 
+glm::vec4 lightPosition(0.0f, 0.0f, 1.0f, 1.0f);
 rt3d::lightStruct light0 = {
-	{ 1.0f,1.0f,1.0f, 1.0f }, // ambient
-	{ 1.0f, 1.0f,1.0f, 1.0f }, // diffuse
-	{ 0.0f, 0.0f, 0.0f, 1.0f }, // specular
-	{ px, py, 1.0f, 1.0f }  // position
+	{ 0.2f,0.2f,0.2f, 1.0f }, // ambient
+	{ 0.7f, 0.7f, 0.7f, 0.7f }, // diffuse 
+	{ 0.8f, 0.8f,0.8f, 1.0f }, // specular
+	{ 0.0f, 0.0f, 1.0f, 1.0f }  // position
 };
 
 rt3d::materialStruct material0 = {
@@ -83,13 +84,37 @@ rt3d::materialStruct material0 = {
 	2.0f  // shininess
 };
 
+
+rt3d::materialStruct material1 = {
+	{ 0.4f, 0.2f, 0.2f, 0.3f }, // ambient
+	{ 0.8f, 0.5f, 0.5f, 0.3f }, // diffuse
+	{ 1.0f, 0.8f, 0.8f, 0.3f }, // specular
+	2.0f  // shininess
+};
+
 GLfloat cubeTexCoords[] = { 0, 0,   1, 1,   1, 0,   0, 0,   0, 1,   1, 1,   0, 0,   1, 1,   1, 0,   0, 0,
 0, 1,   1, 1,   0, 0,   1, 1,   1, 0,   0, 0,   0, 1,   1, 1,   0, 0,   0, 1,
 1, 1,   0, 0,   1, 1,   1, 0,   0, 0,   1, 0,   1, 1,   0, 0,   1, 1,   0, 1,
 0, 0,   1, 0,   1, 1,   0, 0,   1, 1,   0, 1
 };
 
+glm::vec3 eye(0.0f, 4.0f, 4.0f);
+glm::vec3 at(0.0f, 0.0f, 0.0f);
+glm::vec3 up(0.0f, 1.0f, 0.0f);
+glm::vec3 player(0.0f, 0.0f, -10.0f);
+
 GLuint loadBitmap(char*);
+
+glm::vec3 moveForward(glm::vec3 cam, GLfloat angle, GLfloat d) {
+	return glm::vec3(cam.x + d*std::sin(angle*DEG_TO_RAD),
+		cam.y, cam.z - d*std::cos(angle*DEG_TO_RAD));
+}
+
+glm::vec3 moveRight(glm::vec3 pos, GLfloat angle, GLfloat d) {
+	return glm::vec3(pos.x + d*std::cos(angle*DEG_TO_RAD),
+		pos.y, pos.z + d*std::sin(angle*DEG_TO_RAD));
+}
+
 
 // Set up rendering context
 SDL_Window * setupRC(SDL_GLContext &context) {
@@ -135,7 +160,7 @@ void init(void) {
 
 	glUseProgram(shaderProgram);
 	rt3d::setLight(shaderProgram, light0);
-	rt3d::setMaterial(shaderProgram, material0);
+	rt3d::setMaterial(shaderProgram, material1);
 
 }
 
@@ -176,8 +201,27 @@ GLuint loadBitmap(char *fname) {
 
 void update() {
 	const Uint8 *keys = SDL_GetKeyboardState(NULL);
-	if (keys[SDL_SCANCODE_Q]) r -= 0.1;
-	if (keys[SDL_SCANCODE_E]) r += 0.1;
+	if (keys[SDL_SCANCODE_W]) {
+		player = moveForward(player, r, 0.1f);
+	}
+	if (keys[SDL_SCANCODE_S]) {
+		player = moveForward(player, r, -0.1f);
+	}
+	if (keys[SDL_SCANCODE_A]) {
+		player = moveRight(player, r, -0.1f);
+	}
+
+	if (keys[SDL_SCANCODE_D]) {
+		player = moveRight(player, r, 0.1f);
+	}
+	if (keys[SDL_SCANCODE_R]) eye.y += 0.1;
+	if (keys[SDL_SCANCODE_F]) eye.y -= 0.1;
+	if (keys[SDL_SCANCODE_COMMA]) r -= 0.1f;
+	if (keys[SDL_SCANCODE_PERIOD]) r += 0.1f;
+
+	eye.x = player.x;
+	eye.y = player.y + 3.0f;
+	eye.z = player.z + 10.0f;
 }
 
 void draw(SDL_Window * window) {
@@ -189,55 +233,58 @@ void draw(SDL_Window * window) {
 	projection = glm::perspective(float(60.0f*DEG_TO_RAD), 800.0f / 600.0f, 1.0f, 50.0f);
 
 	rt3d::setUniformMatrix4fv(shaderProgram, "projection", glm::value_ptr(projection));
-
-	glBindTexture(GL_TEXTURE_2D, textures[0]);
 	glm::mat4 modelview(1.0);
-	mvStack.push(modelview); // push modelview to stack
-	mvStack.top() = glm::translate(mvStack.top(), glm::vec3(0.0f, 0.0f, -4.0f));
-	mvStack.top() = glm::rotate(mvStack.top(), r, glm::vec3(0.0f, r, 0.0f));
-	rt3d::setUniformMatrix4fv(shaderProgram, "modelview", glm::value_ptr(mvStack.top()));
-	rt3d::drawIndexedMesh(meshObjects[0], cubeIndexCount, GL_TRIANGLES);
+	mvStack.push(modelview);
+	at = moveForward(player, r, 1.0f);
+	mvStack.top() = glm::lookAt(eye, at, up);
 
-	mvStack.pop();
-	glBindTexture(GL_TEXTURE_2D, textures[1]);
-	mvStack.push(modelview); // push modelview to stack
-	mvStack.top() = glm::translate(mvStack.top(), glm::vec3(0.0f, -1.0f, -4.0f));
-	mvStack.top() = glm::rotate(mvStack.top(), r, glm::vec3(0.0f, r, 0.0f));
-	rt3d::setUniformMatrix4fv(shaderProgram, "modelview", glm::value_ptr(mvStack.top()));
-	rt3d::drawIndexedMesh(meshObjects[0], cubeIndexCount, GL_TRIANGLES);
-	mvStack.pop();
+	glm::vec4 tmp = mvStack.top()*lightPosition;
+	rt3d::setLightPos(shaderProgram, glm::value_ptr(tmp));
 
-	glBindTexture(GL_TEXTURE_2D, textures[2]);
-	mvStack.push(modelview); // push modelview to stack
-	mvStack.top() = glm::translate(mvStack.top(), glm::vec3(-1.5f, 0.0f, -4.0f));
-	mvStack.top() = glm::rotate(mvStack.top(), r, glm::vec3(0.0f, r, 0.0f));
-	rt3d::setUniformMatrix4fv(shaderProgram, "modelview", glm::value_ptr(mvStack.top()));
-	rt3d::drawIndexedMesh(meshObjects[0], cubeIndexCount, GL_TRIANGLES);
-
-	mvStack.pop();
-	glBindTexture(GL_TEXTURE_2D, textures[1]);
-	mvStack.push(modelview); // push modelview to stack
-	mvStack.top() = glm::translate(mvStack.top(), glm::vec3(-1.5f, -1.0f, -4.0f));
-	mvStack.top() = glm::rotate(mvStack.top(), r, glm::vec3(0.0f, r, 0.0f));
-	rt3d::setUniformMatrix4fv(shaderProgram, "modelview", glm::value_ptr(mvStack.top()));
-	rt3d::drawIndexedMesh(meshObjects[0], cubeIndexCount, GL_TRIANGLES);
-	mvStack.pop();
-
-	glBindTexture(GL_TEXTURE_2D, textures[2]);
-	mvStack.push(modelview); // push modelview to stack
-	mvStack.top() = glm::translate(mvStack.top(), glm::vec3(+1.5f, 0.0f, -4.0f));
-	mvStack.top() = glm::rotate(mvStack.top(), r, glm::vec3(0.0f, r, 0.0f));
-	rt3d::setUniformMatrix4fv(shaderProgram, "modelview", glm::value_ptr(mvStack.top()));
-	rt3d::drawIndexedMesh(meshObjects[0], cubeIndexCount, GL_TRIANGLES);
-
-	mvStack.pop();
+	// draw a cube for ground plane
 	glBindTexture(GL_TEXTURE_2D, textures[0]);
-	mvStack.push(modelview); // push modelview to stack
-	mvStack.top() = glm::translate(mvStack.top(), glm::vec3(+1.5f, -1.0f, -4.0f));
-	mvStack.top() = glm::rotate(mvStack.top(), r, glm::vec3(0.0f, r, 0.0f));
+	mvStack.push(mvStack.top());
+	mvStack.top() = glm::translate(mvStack.top(), glm::vec3(-10.0f, -0.1f, -10.0f));
+	mvStack.top() = glm::scale(mvStack.top(), glm::vec3(20.0f, 0.1f, 20.0f));
 	rt3d::setUniformMatrix4fv(shaderProgram, "modelview", glm::value_ptr(mvStack.top()));
+	rt3d::setMaterial(shaderProgram, material1);
 	rt3d::drawIndexedMesh(meshObjects[0], cubeIndexCount, GL_TRIANGLES);
 	mvStack.pop();
+
+	//Player
+	glBindTexture(GL_TEXTURE_2D, textures[0]);
+	mvStack.push(mvStack.top());
+	mvStack.top() = glm::translate(mvStack.top(), glm::vec3(player.x, player.y, player.z));
+	mvStack.top() = glm::rotate(mvStack.top(), r, glm::vec3(0.0f, 1.0f, 0.0f));
+	rt3d::setUniformMatrix4fv(shaderProgram, "modelview", glm::value_ptr(mvStack.top()));
+	rt3d::setMaterial(shaderProgram, material1);
+	rt3d::drawIndexedMesh(meshObjects[0], cubeIndexCount, GL_TRIANGLES);
+	mvStack.pop();
+
+	// Cubes for buildings Different texture & individual material properties & positions
+	glBindTexture(GL_TEXTURE_2D, textures[1]);
+	rt3d::materialStruct tmpMaterial = material0;
+	for (int a = 0; a<4; a++) {
+		for (int b = 0; b<4; b++) {
+			tmpMaterial.ambient[0] = a * 0.33f;
+			tmpMaterial.ambient[1] = b * 0.33f;
+			tmpMaterial.diffuse[0] = a * 0.33f;
+			tmpMaterial.diffuse[1] = b * 0.33f;
+			tmpMaterial.specular[0] = a * 0.33f;
+			tmpMaterial.specular[1] = b * 0.33f;
+			rt3d::setMaterial(shaderProgram, tmpMaterial);
+			mvStack.push(mvStack.top());
+			mvStack.top() = glm::translate(mvStack.top(),
+				glm::vec3(a*3.0f, 0.0f, b*3.0f));
+			mvStack.top() = glm::scale(mvStack.top(),
+				glm::vec3(1.0f, 1.0f*(a + 0.1f), scale));
+			rt3d::setUniformMatrix4fv(shaderProgram, "modelview",
+				glm::value_ptr(mvStack.top()));
+			rt3d::drawIndexedMesh(meshObjects[0], cubeIndexCount, GL_TRIANGLES);
+			mvStack.pop();
+		}
+	}
+
 
 	SDL_GL_SwapWindow(window); // swap buffers
 }
